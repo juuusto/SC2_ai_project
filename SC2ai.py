@@ -20,14 +20,15 @@ class TerranBot(sc2.BotAI):
         await self.expand() #expand
         await self.build_barracks() # builds rax
         await self.build_MM() # builds marines
-        #await self.build_orbitals()#not working
-        #await self.drop_mules()#not working
+        await self.build_orbitals()#not working
+        await self.drop_mules()#not working
         await self.build_reactorsandtechlabs() #build reactors
         await self.intel() #used in drawing what the ai sees
         await self.build_factory() #build factory
         await self.build_starport() #build starport
         await self.attack() # attacking algorithm
         await self.build_medivacs() #medivacs
+        await self.lower_depos() #lower depos
 
 
 
@@ -37,6 +38,9 @@ class TerranBot(sc2.BotAI):
                 if self.can_afford(SCV):
                     await self.do(cc.train(SCV))
 
+    async def lower_depos(self):
+        for depos in self.units(SUPPLYDEPOT):
+           await self.do(depos(MORPH_SUPPLYDEPOT_LOWER))
 
     async def build_SUPPLYDEPOS(self):
         if (self.supply_left < 5 and not self.already_pending(SUPPLYDEPOT)) or (self.supply_used > 50 and self.supply_left < 8):
@@ -97,9 +101,28 @@ class TerranBot(sc2.BotAI):
 
     async def intel(self):
         game_data = np.zeros((self.game_info.map_size[1], self.game_info.map_size[0], 3), np.uint8)
-        for cc in self.units(COMMANDCENTER):
-            cc_pos = cc.position
-            cv2.circle(game_data, (int(cc_pos[0]), int(cc_pos[1])), 10, (255, 0, 0), -1)
+
+        drawing_dictionary = {
+                COMMANDCENTER: [15, (0, 255, 0)],
+                SUPPLYDEPOT: [3, (20, 235, 0)],
+                SCV: [1, (55, 200, 0)],
+                REFINERY: [2, (55, 200, 0)],
+                BARRACKS: [3, (200, 100, 0)],
+                FACTORY: [3, (150, 150, 0)],
+                STARPORT: [5, (255, 0, 0)],
+                MEDIVAC: [2, (255, 100, 0)],
+                MARINE: [1, (255, 140, 0)],
+                MARAUDER: [1, (255, 180, 0)],
+                BARRACKSTECHLAB: [3, (200, 160, 0)],
+                BARRACKSREACTOR: [3, (200, 220, 0)],
+        }
+
+        for unit_type in drawing_dictionary:
+            for unit in self.units(unit_type).ready:
+                pos = unit.position
+                cv2.circle(game_data, (int(pos[0]), int(pos[1])), drawing_dictionary[unit_type][0], drawing_dictionary[unit_type][1], -1)
+
+
         flipped = cv2.flip(game_data, 0)
         resized = cv2.resize(flipped, dsize = None, fx= 2, fy=2)
         cv2.imshow('Intel', resized)
@@ -111,8 +134,8 @@ class TerranBot(sc2.BotAI):
 
     async def build_orbitals(self):
             if self.units(BARRACKS).ready.exists and self.can_afford(ORBITALCOMMAND):
-                for cc in self.units(COMMANDCENTER).noqueue: 
-                   await self.do(cc.build(ORBITALCOMMAND))
+                for cc in self.units(COMMANDCENTER): 
+                   await self.do(cc(AbilityId.UPGRADETOORBITAL_ORBITALCOMMAND))
 
 
     async def drop_mules(self):
@@ -154,6 +177,11 @@ class TerranBot(sc2.BotAI):
                 elif self.units.find_by_tag(rax.add_on_tag).name == 'BarracksReactor':
                     if self.can_afford(MARINE):
                         await self.do(rax.train(MARINE))
+                        if self.can_afford(MARINE):
+                            await self.do(rax.train(MARINE))
+            elif self.supply_used < 30 or self.supply_used > 180:
+                if self.can_afford(MARINE):
+                    await self.do(rax.train(MARINE))
 
 
     async def build_medivacs(self):
