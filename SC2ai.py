@@ -19,42 +19,73 @@ class TerranBot(sc2.BotAI):
         await self.build_refinery() #build refineries
         await self.expand() #expand
         await self.build_barracks() # builds rax
-        await self.build_marines() # builds marines
-        await self.build_orbitals()#not working
-        await self.drop_mules()#not working
-        await self.build_reactors() 
-        await self.intel()
+        await self.build_MM() # builds marines
+        #await self.build_orbitals()#not working
+        #await self.drop_mules()#not working
+        await self.build_reactorsandtechlabs() #build reactors
+        await self.intel() #used in drawing what the ai sees
+        await self.build_factory() #build factory
+        await self.build_starport() #build starport
         await self.attack() # attacking algorithm
+        await self.build_medivacs() #medivacs
 
 
 
     async def build_workers(self):
-        if self.units(SCV).amount < (self.units(COMMANDCENTER).amount*16):
+        if self.units(SCV).amount < (self.units(COMMANDCENTER).amount*22):
             for cc in self.units(COMMANDCENTER).ready.noqueue:
                 if self.can_afford(SCV):
                     await self.do(cc.train(SCV))
 
 
     async def build_SUPPLYDEPOS(self):
-        if (self.supply_left < 5 and not self.already_pending(SUPPLYDEPOT)) or (self.supply_used > 80 and self.supply_left < 8):
+        if (self.supply_left < 5 and not self.already_pending(SUPPLYDEPOT)) or (self.supply_used > 50 and self.supply_left < 8):
             ccs = self.units(COMMANDCENTER).ready
             if ccs.exists:
                 if self.can_afford(SUPPLYDEPOT):
                     cc = ccs.first
-                    await self.build(SUPPLYDEPOT, near=cc.position.towards(self.game_info.map_center, 6))
+                    await self.build(SUPPLYDEPOT, near=cc.position.towards(self.game_info.map_center, 5))
 
     
     async def expand(self):
-        if self.units(COMMANDCENTER).amount < 4 and self.can_afford(COMMANDCENTER):
+        if self.units(COMMANDCENTER).amount < 6 and self.can_afford(COMMANDCENTER) and self.units(SCV).amount >= self.units(COMMANDCENTER).amount * 15 :
             await self.expand_now()
 
+    async def build_factory(self):
+        if self.units(BARRACKS).ready and self.can_afford(FACTORY) and self.units(FACTORY).amount < 1:
+            cc = self.units(COMMANDCENTER).ready.first
+            await self.build(FACTORY, near=cc.position.towards(self.game_info.map_center, 10))
 
-    async def build_reactors(self):
-      for sp in self.units(BARRACKS).ready:
-         if sp.add_on_tag == 0:
-            if(self.can_afford(BARRACKSREACTOR)):
-                await self.do(sp.build(BARRACKSREACTOR))
+    async def build_starport(self):
+        if self.units(FACTORY).ready and self.can_afford(STARPORT) and self.units(STARPORT).amount < 1:
+            cc = self.units(COMMANDCENTER).ready.first
+            await self.build(STARPORT, near=cc.position.towards(self.game_info.map_center, 10))
 
+    async def build_reactorsandtechlabs(self):
+        ratio = self.count_addons()
+        for rax in self.units(BARRACKS).ready:
+            if rax.add_on_tag == 0:
+                if ratio == 0:
+                    await self.do(rax.build(BARRACKSREACTOR))
+                elif ratio < float(3.0/2.0):
+                    await self.do(rax.build(BARRACKSTECHLAB))
+                elif ratio >= float(3.0/2.0):
+                    await self.do(rax.build(BARRACKSREACTOR))
+
+    #returns a number that represents the ration of techlab to reactor, ideal ration is 3 *n_techlabs/2* n_reactors.
+    def count_addons(self):
+        reactors = 0
+        techlabs = 0.5
+        for rax in self.units(BARRACKS).ready:
+            if rax.add_on_tag != 0:
+                if self.units.find_by_tag(rax.add_on_tag).name == 'BarracksTechLab':
+                    techlabs += 1.0
+                else:
+                    reactors += 1.0
+        if reactors == 0:
+            return 0
+        else:
+            return float(techlabs/reactors)
 
     def find_target(self,state):
         if len(self.known_enemy_units) > 0:
@@ -79,9 +110,9 @@ class TerranBot(sc2.BotAI):
 
 
     async def build_orbitals(self):
-            if self.units(UnitTypeId.BARRACKS).ready.exists and self.can_afford(UnitTypeId.ORBITALCOMMAND):
-                for cc in self.units(UnitTypeId.COMMANDCENTER): 
-                    self.do(cc.build(ORBITALCOMMAND))
+            if self.units(BARRACKS).ready.exists and self.can_afford(ORBITALCOMMAND):
+                for cc in self.units(COMMANDCENTER).noqueue: 
+                   await self.do(cc.build(ORBITALCOMMAND))
 
 
     async def drop_mules(self):
@@ -89,11 +120,11 @@ class TerranBot(sc2.BotAI):
             mfs = self.state.mineral_field.closer_than(10, oc)
             if mfs:
                 mf = max(mfs, key=lambda x:x.mineral_contents)
-                self.do(oc(AbilityId.CALLDOWNMULE_CALLDOWNMULE, mf))
+                await self.do(oc(AbilityId.CALLDOWNMULE_CALLDOWNMULE, mf))
 
 
     async def build_refinery(self):
-        if self.supply_used > 17 and self.units(REFINERY).amount < 2 :
+        if self.supply_used > 16 and self.units(REFINERY).amount < 4 :
             for cc in self.units(COMMANDCENTER).ready:
                 vsg = self.state.vespene_geyser.closer_than(10.0, cc)
                 for geyser in vsg:
@@ -106,32 +137,51 @@ class TerranBot(sc2.BotAI):
                         await self.do(worker.build(REFINERY, geyser))
 
     async def build_barracks(self):
-        if self.units(BARRACKS).amount < 1 or (self.units(BARRACKS).amount < 3 * 2*self.units(COMMANDCENTER).amount and self.supply_used > 35):
+        if self.units(BARRACKS).amount < 1 or (self.units(BARRACKS).amount < 2 * self.units(COMMANDCENTER).amount and self.supply_used > 35):
             ccs = self.units(COMMANDCENTER).ready
             if ccs.exists:
                 if self.can_afford(BARRACKS):
                     cc = ccs.first
-                    await self.build(BARRACKS, near=cc.position.towards(self.game_info.map_center, 15))
+                    await self.build(BARRACKS, near=cc.position.towards(self.game_info.map_center, 12))
 
-    async def build_marines(self):
+
+    async def build_MM(self):
         for rax in self.units(BARRACKS).ready.noqueue:
-            if not self.can_afford(MARINE):
-                break
-            await self.do(rax.train(MARINE))
+            if rax.has_add_on:
+                if self.units.find_by_tag(rax.add_on_tag).name == 'BarracksTechLab':
+                    if self.can_afford(MARAUDER):
+                        await self.do(rax.train(MARAUDER))
+                elif self.units.find_by_tag(rax.add_on_tag).name == 'BarracksReactor':
+                    if self.can_afford(MARINE):
+                        await self.do(rax.train(MARINE))
 
+
+    async def build_medivacs(self):
+        for sp in self.units(STARPORT).ready.noqueue:
+            if not self.can_afford(MEDIVAC):
+                break
+            await self.do(sp.train(MEDIVAC))
 
     async def attack(self):
-        if self.units(MARINE).amount > 70:
+        if self.units(MARINE).amount > 16 and self.units(MEDIVAC).amount > 1:
             for unit in self.units(MARINE).idle:
+                await self.do(unit.attack(self.find_target(self.state)))
+            for unit in self.units(MEDIVAC).idle:
+                await self.do(unit.attack(self.find_target(self.state)))
+            for unit in self.units(MARAUDER).idle:
                 await self.do(unit.attack(self.find_target(self.state)))
         elif self.units(MARINE).amount > 5:
             if len(self.known_enemy_units) > 0:
                 for unit in self.units(MARINE).idle:
+                    await self.do(unit.attack(random.choice(self.known_enemy_units)))
+                for unit in self.units(MEDIVAC).idle:
+                    await self.do(unit.attack(random.choice(self.known_enemy_units)))
+                for unit in self.units(MARAUDER).idle:
                     await self.do(unit.attack(random.choice(self.known_enemy_units)))
             
 
 #run game with bot        
 run_game(maps.get("(2)16-BitLE"), [
     Bot(Race.Terran, TerranBot()),
-    Computer(Race.Protoss, Difficulty.Hard)
-], realtime=True)
+    Computer(Race.Protoss, Difficulty.Easy)
+], realtime=False)
