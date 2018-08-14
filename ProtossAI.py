@@ -9,7 +9,7 @@ import cv2
 import numpy as np
 import time
 import multiprocessing
-
+import os
 
 
 HEADLESS = False
@@ -29,7 +29,7 @@ class ProtossBot(sc2.BotAI):
     def on_end(self, game_result):
 
         if game_result == Result.Victory:
-            np.save("train_data/{}.npy".format(str(int(time.time()))), np.array(self.train_data))
+            np.save(os.path.dirname(os.path.realpath(__file__)) + "/train_data/{}.npy".format(str(int(time.time()))), np.array(self.train_data))
 
     async def on_step(self, iteration):
         self.iteration = iteration
