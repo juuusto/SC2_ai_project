@@ -15,7 +15,7 @@ Software needed:
 * on_end method from [daniel-kukiela](https://github.com/daniel-kukiela/python-sc2)
 * [tensorflow-gpu](https://www.tensorflow.org/)
 * [keras](https://keras.io/)
-* [cv2](https://docs.opencv.org/3.0-beta/index.html)
+* [OpenCV](https://docs.opencv.org/3.0-beta/index.html)
 
 ### Usage
 Running the ProtossAi.py will give you an numpy array file which has the data from the match.
