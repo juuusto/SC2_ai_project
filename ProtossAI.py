@@ -17,7 +17,8 @@ HEADLESS = False
 
 class ProtossBot(sc2.BotAI):
     def __init__(self):
-        self.ITERATIONS_PER_MINUTE = 3600
+        #Setup for the game, establishing some constants used for this build
+        self.ITERATIONS_PER_MINUTE = 260
         self.MAX_WORKERS = 22
         self.do_something_after = 0
         self.train_data = []
@@ -26,6 +27,8 @@ class ProtossBot(sc2.BotAI):
         self.proxy_built = False
         self.warpgate_done = False
 
+
+    # Requires modification of python-sc2 package
     def on_end(self, game_result):
 
         if game_result == Result.Victory:
@@ -49,6 +52,8 @@ class ProtossBot(sc2.BotAI):
         await self.chronoboost()
         await self.blink()
 
+
+    # Mix up the scouting pattern 
     def random_location_variance(self, enemy_start_location):
         x = enemy_start_location[0]
         y = enemy_start_location[1]
@@ -65,9 +70,11 @@ class ProtossBot(sc2.BotAI):
         if y > self.game_info.map_size[1]:
             y = self.game_info.map_size[1]
 
+        # Have to convert the position to Point2 from pointlike
         go_to = position.Point2(position.Pointlike((x,y)))
         return go_to
 
+    # Use our adepts to locate the enemy
     async def scout(self):
         if len(self.units(ADEPT)) > 0:
             scout = self.units(ADEPT)[0]
@@ -76,11 +83,13 @@ class ProtossBot(sc2.BotAI):
                 move_to = self.random_location_variance(enemy_location)
                 await self.do(scout.attack(move_to))
 
+    #Visualizes the game from the bots perspective, especially useful for linux users
     async def intel(self):
+        #setup up the data type
         game_data = np.zeros((self.game_info.map_size[1], self.game_info.map_size[0], 3), np.uint8)
 
-
-        draw_dict = {
+        #Prefixed colours for our buildings and units
+        unit_colours = {
                      NEXUS: [15, (0, 255, 0)],
                      PYLON: [3, (20, 235, 0)],
                      PROBE: [1, (55, 200, 0)],
@@ -90,21 +99,22 @@ class ProtossBot(sc2.BotAI):
                      TWILIGHTCOUNCIL: [5, (255, 0, 0)],
                     }
 
-        for unit_type in draw_dict:
+        #Loop over our buildings and draw them
+        for unit_type in unit_colours:
             for unit in self.units(unit_type).ready:
                 pos = unit.position
-                cv2.circle(game_data, (int(pos[0]), int(pos[1])), draw_dict[unit_type][0], draw_dict[unit_type][1], -1)
+                cv2.circle(game_data, (int(pos[0]), int(pos[1])), unit_colours[unit_type][0], unit_colours[unit_type][1], -1)
 
-        main_base_names = ["nexus", "commandcenter", "hatchery"]
+        main_bases = ["nexus", "commandcenter", "hatchery"]
 
 
         for enemy_building in self.known_enemy_structures:
             pos = enemy_building.position
-            if enemy_building.name.lower() not in main_base_names:
+            if enemy_building.name.lower() not in main_bases:
                 cv2.circle(game_data, (int(pos[0]), int(pos[1])), 5, (200, 50, 212), -1)
         for enemy_building in self.known_enemy_structures:
             pos = enemy_building.position
-            if enemy_building.name.lower() in main_base_names:
+            if enemy_building.name.lower() in main_bases:
                 cv2.circle(game_data, (int(pos[0]), int(pos[1])), 15, (0, 0, 255), -1)
 
         for enemy_unit in self.known_enemy_units:
@@ -121,7 +131,7 @@ class ProtossBot(sc2.BotAI):
                     cv2.circle(game_data, (int(pos[0]), int(pos[1])), 3, (50, 0, 215), -1)
 
 
-
+        # Establishing bars, that represent the game state, into our imagine
         line_max = 50
         mineral_ratio = self.minerals / 1500
         if mineral_ratio > 1.0:
@@ -147,14 +157,15 @@ class ProtossBot(sc2.BotAI):
         cv2.line(game_data, (0, 7), (int(line_max*vespene_ratio), 7), (210, 200, 0), 3)  # gas / 1500
         cv2.line(game_data, (0, 3), (int(line_max*mineral_ratio), 3), (0, 255, 25), 3)  # minerals minerals/1500
 
-        # flip horizontally to make our final fix in visual representation:
+        # flip horizontally to fix visual representation
         self.flipped = cv2.flip(game_data, 0)
 
+        #show the imagine
         if not HEADLESS:
             resized = cv2.resize(self.flipped, dsize=None, fx=2, fy=2)
             cv2.imshow('Intel', resized)
             cv2.waitKey(1)
-
+    # These functions just build buildings or units
     async def build_workers(self):
         if len(self.units(PROBE)) < self.MAX_WORKERS:
             for nexus in self.units(NEXUS).ready.noqueue:
@@ -243,7 +254,11 @@ class ProtossBot(sc2.BotAI):
             return random.choice(self.known_enemy_structures)
         else:
             return self.enemy_start_locations[0]
-
+    #This functon is used for attacking. Consists of 4 options:
+    #1. Do nothing
+    #2. Attack enemy units
+    #3. Attack enemy buildings
+    #4. Attack the enemy starting location
     async def attack(self):
         if len(self.units(STALKER).idle) > 8:
             choice = random.randrange(0, 4)
@@ -255,24 +270,27 @@ class ProtossBot(sc2.BotAI):
                     self.do_something_after = self.iteration + wait
 
                 elif choice == 1:
-                    #attack_unit_closest_nexuses
+                    #attack the unit closest to the nexuses
                     if len(self.known_enemy_units) > 0:
                         target = self.known_enemy_units.closest_to(random.choice(self.units(NEXUS)))
-
+                    #attack enemy buildings
                 elif choice == 2:
-                    #attack enemy structures
                     if len(self.known_enemy_structures) > 0:
                         target = random.choice(self.known_enemy_structures)
-
+                    #attack enemy staring position
                 elif choice == 3:
-                    #attack_enemy_start
                     target = self.enemy_start_locations[0]
 
+
+                # Loop over idle stalkers and attack the position
                 if target:
                     for st in self.units(STALKER).idle:
                         await self.do(st.attack(target))
+
+                # save the choice to a array used in our machine learning
                 y = np.zeros(4)
                 y[choice] = 1
+                #We have to flip it again
                 self.train_data.append([y,self.flipped])
 
 
@@ -296,6 +314,8 @@ class ProtossBot(sc2.BotAI):
                 await self.do(gateway(MORPH_WARPGATE))
                 warpgate_done = True
 
+
+    # Used for chronoboost
     async def chronoboost(self):
         if self.units(CYBERNETICSCORE).ready.exists and not self.units(WARPGATE).exists:
             ccore = self.units(CYBERNETICSCORE).ready.first
@@ -314,7 +334,7 @@ class ProtossBot(sc2.BotAI):
                         for nexus in self.units(NEXUS).ready:
                             await self.do(nexus(AbilityId.EFFECT_CHRONOBOOSTENERGYCOST, twlc))
 
-
+    #check if we have an ability
     async def has_ability(self, ability, unit):
         abilities = await self.get_available_abilities(unit)
         if ability in abilities:
@@ -322,7 +342,7 @@ class ProtossBot(sc2.BotAI):
         else:
             return False
 
-
+    #Sexy blink micro time
     async def blink(self):
             for stalker in self.units(STALKER):
                 has_blink = await self.has_ability(EFFECT_BLINK_STALKER,stalker)
@@ -332,13 +352,15 @@ class ProtossBot(sc2.BotAI):
                     if has_blink:
                         await self.do(stalker(EFFECT_BLINK_STALKER,escape_location))
 
-
+# Final method to launch the game with our bot
 def game():
     run_game(maps.get("AbyssalReefLE"), [
         Bot(Race.Protoss, ProtossBot()),
         Computer(Race.Terran, Difficulty.Hard)
         ], realtime=False)
 
+
+# Lets run it multicore to get more data.
 counter = 0
 while(counter < 1000):
     if __name__ == '__main__':
