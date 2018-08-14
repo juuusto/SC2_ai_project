@@ -21,7 +21,7 @@ Running the ProtossAi.py will give you an numpy array file which has the data fr
 
 ## Authors
 
-* **Oskari Järvinen** - *Initial work* - [PurpleBooth](https://github.com/juuusto)
+* **Oskari Järvinen** - *Initial work* - [juuusto](https://github.com/juuusto)
 
 ## License
 
