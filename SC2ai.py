@@ -1,5 +1,8 @@
+#This is bot used to train the protoss bot for the blink stalker all-in
+
+
 import sc2
-from sc2 import run_game, maps, Race, Difficulty
+from sc2 import run_game, maps, Race, Difficulty, position
 from sc2.player import Bot, Computer
 from sc2.constants import *
 from sc2.ids.unit_typeid import UnitTypeId
@@ -12,6 +15,7 @@ import cv2
 
 
 class TerranBot(sc2.BotAI):
+
     async def on_step(self, iteration):
         await self.distribute_workers()  #worker distribution, found in sc2/bot_ai.py
         await self.build_workers() #worker building
@@ -29,6 +33,8 @@ class TerranBot(sc2.BotAI):
         await self.attack() # attacking algorithm
         await self.build_medivacs() #medivacs
         await self.lower_depos() #lower depos
+        await self.scout() # scouting
+        
 
 
 
@@ -58,12 +64,12 @@ class TerranBot(sc2.BotAI):
     async def build_factory(self):
         if self.units(BARRACKS).ready and self.can_afford(FACTORY) and self.units(FACTORY).amount < 1:
             cc = self.units(COMMANDCENTER).ready.first
-            await self.build(FACTORY, near=cc.position.towards(self.game_info.map_center, 10))
+            await self.build(FACTORY, near=cc.position.towards(self.game_info.map_center, 8))
 
     async def build_starport(self):
         if self.units(FACTORY).ready and self.can_afford(STARPORT) and self.units(STARPORT).amount < 1:
             cc = self.units(COMMANDCENTER).ready.first
-            await self.build(STARPORT, near=cc.position.towards(self.game_info.map_center, 10))
+            await self.build(STARPORT, near=cc.position.towards(self.game_info.map_center, 8))
 
     async def build_reactorsandtechlabs(self):
         ratio = self.count_addons()
@@ -79,7 +85,7 @@ class TerranBot(sc2.BotAI):
     #returns a number that represents the ration of techlab to reactor, ideal ration is 3 *n_techlabs/2* n_reactors.
     def count_addons(self):
         reactors = 0
-        techlabs = 0.5
+        techlabs = 0.1
         for rax in self.units(BARRACKS).ready:
             if rax.add_on_tag != 0:
                 if self.units.find_by_tag(rax.add_on_tag).name == 'BarracksTechLab':
@@ -90,6 +96,34 @@ class TerranBot(sc2.BotAI):
             return 0
         else:
             return float(techlabs/reactors)
+
+    def random_location_variance(self, enemy_start_location):
+        x = enemy_start_location[0]
+        y = enemy_start_location[1]
+
+        x += ((random.randrange(-10, 10))/100) * enemy_start_location[0]
+        y += ((random.randrange(-10, 10))/100) * enemy_start_location[1]
+
+        if x < 0:
+            x = 0
+        if y < 0:
+            y = 0
+        if x > self.game_info.map_size[0]:
+            x = self.game_info.map_size[0]
+        if y > self.game_info.map_size[1]:
+            y = self.game_info.map_size[1]
+
+        go_to = position.Point2(position.Pointlike((x,y)))
+        return go_to
+
+    async def scout(self):
+        if self.supply_used == 21:
+            for scv in self.units(SCV).idle:
+                enemy_location = self.enemy_start_locations[0]
+                move_to = self.random_location_variance(enemy_location)
+                await self.do(scv.move(move_to))
+                break
+
 
     def find_target(self,state):
         if len(self.known_enemy_units) > 0:
@@ -121,6 +155,32 @@ class TerranBot(sc2.BotAI):
             for unit in self.units(unit_type).ready:
                 pos = unit.position
                 cv2.circle(game_data, (int(pos[0]), int(pos[1])), drawing_dictionary[unit_type][0], drawing_dictionary[unit_type][1], -1)
+
+
+        main_bases = ["nexus", "commandcenter", "hatchery"]
+        for enemy_building in self.known_enemy_structures:
+            pos = enemy_building.position
+            if enemy_building.name.lower() not in main_bases:
+                cv2.circle(game_data, (int(pos[0]), int(pos[1])), 5, (200, 50, 212), -1)
+        for enemy_building in self.known_enemy_structures:
+            pos = enemy_building.position
+            if enemy_building.name.lower() in main_bases:
+                cv2.circle(game_data, (int(pos[0]), int(pos[1])), 15, (0, 0, 255), -1)
+
+        for enemy_unit in self.known_enemy_units:
+
+            if not enemy_unit.is_structure:
+                worker_names = ["probe",
+                                "scv",
+                                "drone"]
+                # if a worker, draw something not so aggresive :)
+                pos = enemy_unit.position
+                if enemy_unit.name.lower() in worker_names:
+                    cv2.circle(game_data, (int(pos[0]), int(pos[1])), 1, (55, 0, 155), -1)
+                else:
+                    cv2.circle(game_data, (int(pos[0]), int(pos[1])), 3, (50, 0, 215), -1)
+
+
 
 
         flipped = cv2.flip(game_data, 0)
@@ -165,7 +225,7 @@ class TerranBot(sc2.BotAI):
             if ccs.exists:
                 if self.can_afford(BARRACKS):
                     cc = ccs.first
-                    await self.build(BARRACKS, near=cc.position.towards(self.game_info.map_center, 12))
+                    await self.build(BARRACKS, near=cc.position.towards(self.game_info.map_center, 15))
 
 
     async def build_MM(self):
@@ -191,14 +251,14 @@ class TerranBot(sc2.BotAI):
             await self.do(sp.train(MEDIVAC))
 
     async def attack(self):
-        if self.units(MARINE).amount > 16 and self.units(MEDIVAC).amount > 1:
+        if self.supply_used > 150:
             for unit in self.units(MARINE).idle:
                 await self.do(unit.attack(self.find_target(self.state)))
             for unit in self.units(MEDIVAC).idle:
                 await self.do(unit.attack(self.find_target(self.state)))
             for unit in self.units(MARAUDER).idle:
                 await self.do(unit.attack(self.find_target(self.state)))
-        elif self.units(MARINE).amount > 5:
+        elif self.known_enemy_units.closer_than(50,self.units(COMMANDCENTER)).first:
             if len(self.known_enemy_units) > 0:
                 for unit in self.units(MARINE).idle:
                     await self.do(unit.attack(random.choice(self.known_enemy_units)))
@@ -209,7 +269,7 @@ class TerranBot(sc2.BotAI):
             
 
 #run game with bot        
-run_game(maps.get("(2)16-BitLE"), [
+run_game(maps.get("AbyssalReefLE"), [
     Bot(Race.Terran, TerranBot()),
-    Computer(Race.Protoss, Difficulty.Easy)
+    Computer(Race.Protoss, Difficulty.Hard)
 ], realtime=False)
