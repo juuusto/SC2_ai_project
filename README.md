@@ -18,7 +18,7 @@ Software needed:
 * [OpenCV](https://docs.opencv.org/3.0-beta/index.html)
 
 ### Usage
-Running the ProtossAi.py will give you an numpy array file which has the data from the match.
+Running the ProtossAi.py will create a numpy file, which contains raw data. This file can be used in creating a neural network model, that hopefully increases the win percentage.
 
 ## Authors
 
