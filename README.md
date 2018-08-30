@@ -28,8 +28,8 @@ Running the ProtossAi.py will give you an numpy array file which has the data fr
 
 This project is licensed under the MIT License
 
-## Acknowledgments
+## Acknowledgements
 
-* Shoutout for [sentdex](https://www.youtube.com/user/sentdex) -for contributing the idea and some of the code and for sparking general interest in machine learning
+* Shoutout for [sentdex](https://www.youtube.com/user/sentdex) -for sparking the idea and contributing parts of the code.
 * Big thanks to [Dentosal](https://github.com/Dentosal) for creating the API used for communicating with the game.
 
