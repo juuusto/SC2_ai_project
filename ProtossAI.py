@@ -2,7 +2,7 @@
 
 import sc2
 from sc2 import run_game, maps, Race, Difficulty, position, Result
-from sc2.player import Bot, Computer
+from sc2.player import Bot, Computer, Human
 from sc2.constants import *
 import random
 import cv2
@@ -93,11 +93,12 @@ class ProtossBot(sc2.BotAI):
                      NEXUS: [15, (0, 255, 0)],
                      PYLON: [3, (20, 235, 0)],
                      PROBE: [1, (55, 200, 0)],
+                     STALKER: [2, (67, 200, 43)],
                      ASSIMILATOR: [2, (55, 200, 0)],
                      GATEWAY: [3, (200, 100, 0)],
                      CYBERNETICSCORE: [3, (150, 150, 0)],
                      TWILIGHTCOUNCIL: [5, (255, 0, 0)],
-                    }
+        }
 
         #Loop over our buildings and draw them
         for unit_type in unit_colours:
@@ -147,7 +148,7 @@ class ProtossBot(sc2.BotAI):
 
         plausible_supply = self.supply_cap / 200.0
 
-        military_weight = len(self.units(VOIDRAY)) / (self.supply_cap-self.supply_left)
+        military_weight = len(self.units(STALKER)) / (self.supply_cap-self.supply_left)
         if military_weight > 1.0:
             military_weight = 1.0
 
@@ -254,6 +255,7 @@ class ProtossBot(sc2.BotAI):
             return random.choice(self.known_enemy_structures)
         else:
             return self.enemy_start_locations[0]
+
     #This functon is used for attacking. Consists of 4 options:
     #1. Do nothing
     #2. Attack enemy units
@@ -287,10 +289,10 @@ class ProtossBot(sc2.BotAI):
                     for st in self.units(STALKER).idle:
                         await self.do(st.attack(target))
 
-                # save the choice to a array used in our machine learning
+                # save the choice to an array used in our machine learning
                 y = np.zeros(4)
                 y[choice] = 1
-                #We have to flip it again
+                #We have to flip it again to get the size properly
                 self.train_data.append([y,self.flipped])
 
 
@@ -360,9 +362,8 @@ def game():
         ], realtime=False)
 
 
-# Lets run it multicore to get more data.
-counter = 0
-while(counter < 1000):
+# Lets run it multithread to get more data.
+while(True):
     if __name__ == '__main__':
         thread1 = multiprocessing.Process(target=game, args=())
         thread2 = multiprocessing.Process(target=game, args=())
@@ -373,4 +374,3 @@ while(counter < 1000):
         thread1.join()
         thread2.join()
         thread3.join()
-    counter += 1
